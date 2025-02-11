@@ -18,7 +18,6 @@ from constants import (
     ELASTICSEARCH_HOST,
     ELASTICSEARCH_PORT,
     INDEX_NAME,
-    TYPE_NAME,
     MESSAGE_BATCH_SIZE,
     SCRAPING_UPDATES_INTERVAL,
     QUEUE_SIZE_MULTIPLIER,
@@ -84,7 +83,7 @@ async def _collect_unread_from_channels(
         # impossible to get number of unread messages to set as limit
         async for message in _channel.history(limit=None, after=_dt_from):
             _message_id, _message = await process_message(message)
-            _messages.append({"_index": INDEX_NAME, "_type": TYPE_NAME, '_op_type': 'index', "_id": _message_id, "_source": _message})
+            _messages.append({"_index": INDEX_NAME, '_op_type': 'index', "_id": _message_id, "_source": _message})
             _counter += 1
             if _counter % MESSAGE_BATCH_SIZE == 0:
                 try:

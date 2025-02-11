@@ -4,6 +4,10 @@ from os import getenv
 from datetime import datetime
 from logger import log
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 def __history_datetime_setter(_history_datetime: str) -> t.Union[str, datetime]:
     history_datetime = ''
@@ -57,7 +61,6 @@ MESSAGE_BATCH_SIZE = 1000
 HEALTH_CHECK_INTERVAL = getenv('HEALTH_CHECK_INTERVAL', "")
 
 INDEX_NAME = getenv('INDEX', "")
-TYPE_NAME = '_doc'
 
 ELASTICSEARCH_HOST = getenv('ELASTICSEARCH_HOST', "")
 ELASTICSEARCH_PORT = int(getenv('ELASTICSEARCH_PORT', ""))
