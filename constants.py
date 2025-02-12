@@ -6,7 +6,7 @@ from logger import log
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# load_dotenv()
 
 
 def __history_datetime_setter(_history_datetime: str) -> t.Union[str, datetime]:
