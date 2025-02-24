@@ -12,22 +12,18 @@ from constants import (
     ELASTICSEARCH_HOST,
     ELASTICSEARCH_PORT,
     INDEX_NAME,
-    TYPE_NAME,
     HISTORICAL_RUN_START_DATE as HRSD,
     SCRAPING_UPDATES_INTERVAL,
     SCRAPING_HISTORY_INTERVAL
 )
 
 
-es = Elasticsearch([{"host": ELASTICSEARCH_HOST, "port": ELASTICSEARCH_PORT}], timeout=30, scheme={})
+es = Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
 
 
 # ====================== Clients + Connections ======================
 def es_client_init() -> Elasticsearch:
-    return Elasticsearch([{
-        "host": ELASTICSEARCH_HOST,
-        "port": ELASTICSEARCH_PORT,
-    }], timeout=30, scheme={})
+    return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
 
 
 # ====================== ES requests/queries/parsers ======================
@@ -38,7 +34,7 @@ async def write_to_es(
     index_name: str = INDEX_NAME
 ) -> None:
     try:
-        es.index(index=index_name, doc_type=TYPE_NAME, id=message_id, body=message)
+        es.index(index=index_name, id=message_id, body=message)
     except Exception as e:
         log.error(f"Failed to write tweet {message_id} from {message['sender_username']} to ES: {e}")
 
@@ -48,7 +44,7 @@ def _parse_time_field(time_field: t.Union[str, int]) -> datetime:
         return datetime.fromtimestamp(int(time_field) // 1000, tz=timezone.utc).replace(tzinfo=None)
     else:
         try:
-            return datetime.strptime(time_field.split('+')[0], '%Y-%m-%dT%H:%M:%S.%f')
+            return datetime.strptime(time_field, '%Y-%m-%dT%H:%M:%S')
         except Exception as e:
             log.error(f'Error parse time field: {time_field}')
             raise e
@@ -151,8 +147,8 @@ async def process_message(message) -> t.Tuple[str, t.Dict[t.Union[str, t.Any], t
              'emoji_list': [emoji.EMOJI_DATA[_]['en'] for _ in emoji.distinct_emoji_list(message.content)],
              'emoji_img_list': [_ for _ in emoji.distinct_emoji_list(message.content)],
              'cashtag_list': re.findall(r'\${1}\b([a-zA-Z]{2,})', message.content),
-             'timestamp': message.created_at,
-             'computed_at': datetime.utcnow(),
+             'timestamp': message.created_at.replace(microsecond=0).replace(tzinfo=None),
+             'computed_at': datetime.utcnow().replace(microsecond=0),
              'is_reply': True if message.type.name == 'reply' else False,
              'reply_to_msg': message.reference.message_id if message.reference else None,
              'mentions': message.raw_mentions,

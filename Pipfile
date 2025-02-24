@@ -6,13 +6,14 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-elasticsearch = "==7.5.1"
+elasticsearch = "==7.14"
 flask = "==2.0.0"
 Werkzeug = "==2.2.2"
 discord.py = "==2.3.2"
 emoji = "==2.7.0"
 prometheus-client = "==0.18.0"
 python-json-logger = "==2.0.7"
+python-dotenv = "*"
 
 [requires]
 python_version = "3.8"
