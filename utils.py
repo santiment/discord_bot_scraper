@@ -11,6 +11,8 @@ from logger import log
 from constants import (
     ELASTICSEARCH_HOST,
     ELASTICSEARCH_PORT,
+    ELASTICSEARCH_HOST_NEW,
+    ELASTICSEARCH_PORT_NEW,
     INDEX_NAME,
     HISTORICAL_RUN_START_DATE as HRSD,
     SCRAPING_UPDATES_INTERVAL,
@@ -22,19 +24,30 @@ es = Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", re
 
 
 # ====================== Clients + Connections ======================
-def es_client_init() -> Elasticsearch:
-    return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
+def es_client_init(second_cluster=False) -> Elasticsearch:
+    if second_cluster:
+        return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST_NEW}:{ELASTICSEARCH_PORT_NEW}", request_timeout=30)
+    else:
+        return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
 
 
 # ====================== ES requests/queries/parsers ======================
 async def write_to_es(
     es: Elasticsearch,
+    es_new: Elasticsearch,
     message_id: str,
     message: t.Dict[t.Union[str, t.Any], t.Union[list, t.Any]],
     index_name: str = INDEX_NAME
 ) -> None:
     try:
-        es.index(index=index_name, id=message_id, body=message)
+        if es.ping():
+            es.index(index=index_name, id=message_id, body=message)
+        else:
+            log.error(f"Failed to connect to ES: {ELASTICSEARCH_HOST}")
+        if es_new.ping():
+            es_new.index(index=index_name, id=message_id, body=message)
+        else:
+            log.error(f"Failed to connect to ES: {ELASTICSEARCH_HOST_NEW}")
     except Exception as e:
         log.error(f"Failed to write tweet {message_id} from {message['sender_username']} to ES: {e}")
 
