@@ -24,9 +24,12 @@ es = Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", re
 
 
 # ====================== Clients + Connections ======================
-def es_client_init(second_cluster=False) -> Elasticsearch:
+def es_client_init(second_cluster=False) -> t.Optional[Elasticsearch]:
     if second_cluster:
-        return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST_NEW}:{ELASTICSEARCH_PORT_NEW}", request_timeout=30)
+        try:
+            return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST_NEW}:{ELASTICSEARCH_PORT_NEW}", request_timeout=30)
+        except Exception:
+            return None
     else:
         return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
 
@@ -34,7 +37,7 @@ def es_client_init(second_cluster=False) -> Elasticsearch:
 # ====================== ES requests/queries/parsers ======================
 async def write_to_es(
     es: Elasticsearch,
-    es_new: Elasticsearch,
+    es_new: t.Optional[Elasticsearch],
     message_id: str,
     message: t.Dict[t.Union[str, t.Any], t.Union[list, t.Any]],
     index_name: str = INDEX_NAME
@@ -44,10 +47,11 @@ async def write_to_es(
             es.index(index=index_name, id=message_id, body=message)
         else:
             log.error(f"Failed to connect to ES: {ELASTICSEARCH_HOST}")
-        if es_new.ping():
+            raise ConnectionError(f"Failed to connect to ES: {ELASTICSEARCH_HOST}")
+        if es_new is not None and es_new.ping():
             es_new.index(index=index_name, id=message_id, body=message)
         else:
-            log.error(f"Failed to connect to ES: {ELASTICSEARCH_HOST_NEW}")
+            log.warning(f"Failed to connect to ES: {ELASTICSEARCH_HOST_NEW}")
     except Exception as e:
         log.error(f"Failed to write tweet {message_id} from {message['sender_username']} to ES: {e}")
 
