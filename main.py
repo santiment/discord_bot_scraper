@@ -11,7 +11,7 @@ from prometheus_client import Gauge, make_wsgi_app
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from logger import log
-from utils import calculate_dt_from, process_message, es_client_init, write_to_es
+from utils import calculate_dt_from, process_message, es_client_init, es_client_init_backup, write_to_es
 from constants import (
     GUILD,
     HEALTH_CHECK_INTERVAL,
@@ -70,6 +70,7 @@ async def _collect_unread_from_channels(
     client: discord.client.Client,
     es: Elasticsearch,
     channels: t.Dict[int, str],
+    es_backup: t.Optional[Elasticsearch] = None,
     _history: bool = False
 ) -> None:
     """
@@ -78,9 +79,9 @@ async def _collect_unread_from_channels(
                     True = collects long-term history for SCRAPING_HISTORY_INTERVAL
                     False = collects short-term history(aka updates) for SCRAPING_UPDATE_INTERVAL
     """
+
     async def __looping_through_messages(_channel, _dt_from) -> int:
         _counter, _messages = 0, list()
-        # impossible to get number of unread messages to set as limit
         async for message in _channel.history(limit=None, after=_dt_from):
             _message_id, _message = await process_message(message)
             _messages.append({"_index": INDEX_NAME, '_op_type': 'index', "_id": _message_id, "_source": _message})
@@ -90,13 +91,26 @@ async def _collect_unread_from_channels(
                     helpers.bulk(es, _messages)
                 except BulkIndexError:
                     pass
-                finally:
-                    _messages = list()
+                if es_backup:
+                    try:
+                        helpers.bulk(es_backup, _messages)
+                    except BulkIndexError:
+                        pass
+                    except Exception as e:
+                        log.error(f'Failed to write batch to backup ES: {e}')
+                _messages = list()
 
         try:
             helpers.bulk(es, _messages)
         except BulkIndexError:
             pass
+        if es_backup:
+            try:
+                helpers.bulk(es_backup, _messages)
+            except BulkIndexError:
+                pass
+            except Exception as e:
+                log.error(f'Failed to write batch to backup ES: {e}')
 
         return _counter
 
@@ -129,7 +143,8 @@ async def collect_history(client: discord.client.Client, channels: t.Dict[int, s
     """
     log.info('Start collecting history')
     es = es_client_init()
-    await _collect_unread_from_channels(client, es, channels, _history=True)
+    es_backup = es_client_init_backup()
+    await _collect_unread_from_channels(client, es, channels, es_backup, _history=True)
 
 
 async def collect_updates(client: discord.client.Client, channels: t.Dict[int, str]) -> None:
@@ -141,9 +156,10 @@ async def collect_updates(client: discord.client.Client, channels: t.Dict[int, s
     """
     log.info('Start collecting updates')
     es = es_client_init()
+    es_backup = es_client_init_backup()
     while True:
         ts_to = int(time.time())
-        await _collect_unread_from_channels(client, es, channels)
+        await _collect_unread_from_channels(client, es, channels, es_backup)
         ts_to += SCRAPING_UPDATES_INTERVAL
         time_to_sleep = max(ts_to - time.time(), 1)
         await asyncio.sleep(time_to_sleep)
@@ -166,6 +182,7 @@ async def consumer(
     client: discord.client.Client,
     queue: asyncio.queues.Queue,
     es: Elasticsearch,
+    es_backup: t.Optional[Elasticsearch] = None,
 ) -> None:
     """
     channel filtering and message processing are performed here
@@ -179,7 +196,7 @@ async def consumer(
         # writes smth in channel, even though it doesn't - skip those messages
         if message.author != client.user:
             _message_id, _message = await process_message(message)
-            await write_to_es(es, _message_id, _message)
+            await write_to_es(es, _message_id, _message, es_backup=es_backup)
 
 
 async def main():
@@ -196,6 +213,7 @@ async def main():
 
     q = asyncio.Queue(maxsize=len(CHANNELS) * QUEUE_SIZE_MULTIPLIER)
     es = es_client_init()
+    es_backup = es_client_init_backup()
 
     @client.event
     async def on_ready():
@@ -219,7 +237,7 @@ async def main():
             collect_history(client, channels),
             collect_updates(client, channels),
             stream_channels(client, q),
-            consumer(client, q, es),
+            consumer(client, q, es, es_backup),
         )
 
     await client.start(BOT_TOKEN)
