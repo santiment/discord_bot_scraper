@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from logger import log
 from constants import (
     ELASTICSEARCH_HOST,
+    ELASTICSEARCH_HOST_BACKUP,
     ELASTICSEARCH_PORT,
+    ELASTICSEARCH_PORT_BACKUP,
     INDEX_NAME,
     HISTORICAL_RUN_START_DATE as HRSD,
     SCRAPING_UPDATES_INTERVAL,
@@ -26,17 +28,30 @@ def es_client_init() -> Elasticsearch:
     return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
 
 
+def es_client_init_backup() -> t.Optional[Elasticsearch]:
+    if not ELASTICSEARCH_HOST_BACKUP:
+        return None
+    return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST_BACKUP}:{ELASTICSEARCH_PORT_BACKUP}", request_timeout=30)
+
+
 # ====================== ES requests/queries/parsers ======================
 async def write_to_es(
     es: Elasticsearch,
     message_id: str,
     message: t.Dict[t.Union[str, t.Any], t.Union[list, t.Any]],
-    index_name: str = INDEX_NAME
+    index_name: str = INDEX_NAME,
+    es_backup: t.Optional[Elasticsearch] = None,
 ) -> None:
     try:
         es.index(index=index_name, id=message_id, body=message)
     except Exception as e:
         log.error(f"Failed to write tweet {message_id} from {message['sender_username']} to ES: {e}")
+
+    if es_backup:
+        try:
+            es_backup.index(index=index_name, id=message_id, body=message)
+        except Exception as e:
+            log.error(f"Failed to write tweet {message_id} to backup ES: {e}")
 
 
 def _parse_time_field(time_field: t.Union[str, int]) -> datetime:
