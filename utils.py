@@ -13,19 +13,23 @@ from constants import (
     ELASTICSEARCH_HOST_BACKUP,
     ELASTICSEARCH_PORT,
     ELASTICSEARCH_PORT_BACKUP,
+    ELASTICSEARCH_USERNAME,
+    ELASTICSEARCH_PASSWORD,
     INDEX_NAME,
     HISTORICAL_RUN_START_DATE as HRSD,
     SCRAPING_UPDATES_INTERVAL,
     SCRAPING_HISTORY_INTERVAL
 )
 
+ES_AUTH_KWARGS = {'http_auth': (ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD)} \
+    if ELASTICSEARCH_USERNAME and ELASTICSEARCH_PASSWORD else {}
 
-es = Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
+es = Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30, **ES_AUTH_KWARGS)
 
 
 # ====================== Clients + Connections ======================
 def es_client_init() -> Elasticsearch:
-    return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30)
+    return Elasticsearch(hosts=f"http://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}", request_timeout=30, **ES_AUTH_KWARGS)
 
 
 def es_client_init_backup() -> t.Optional[Elasticsearch]:

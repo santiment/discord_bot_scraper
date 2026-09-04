@@ -11,7 +11,7 @@ from prometheus_client import Gauge, make_wsgi_app
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from logger import log
-from utils import calculate_dt_from, process_message, es_client_init, es_client_init_backup, write_to_es
+from utils import calculate_dt_from, process_message, es_client_init, es_client_init_backup, write_to_es, ES_AUTH_KWARGS
 from constants import (
     GUILD,
     HEALTH_CHECK_INTERVAL,
@@ -56,7 +56,7 @@ def health_check():
         }
       }
     }
-    es = Elasticsearch([{'host': ELASTICSEARCH_HOST, 'port': ELASTICSEARCH_PORT}])
+    es = Elasticsearch([{'host': ELASTICSEARCH_HOST, 'port': ELASTICSEARCH_PORT}], **ES_AUTH_KWARGS)
 
     size = es.search(index=INDEX_NAME, body=query).get('hits').get('total').get('value')
     ES_DISCORD_NEW_DOCS_NUMBER.labels(GUILD).set(0 if size is None else size)
